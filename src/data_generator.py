@@ -152,53 +152,62 @@ def generate_running_data_payload(config, required_signpoints, point_rules_data,
     """
     生成符合POST请求体格式的跑步数据，并整合打卡点。
     """
-    all_path_segments = []
-    all_path_segments.append({'latitude': config['START_LATITUDE'], 'longitude': config['START_LONGITUDE']})
+    # 快速生成路径：忽略用户自定义多段插值，直接生成一段大约 5km、配速约 3.5min/km 的轨迹。
+    target_distance_m = 5000  # 约 5km
+    pace_sec_per_km = 3.5 * 60  # 3.5 分钟每公里 -> 秒/公里
+    total_duration_sec = int(round(pace_sec_per_km * (target_distance_m / 1000.0)))
 
-    extracted_signpoints_coords = []
-    for sp in required_signpoints:
-        lon_str, lat_str = sp['location'].split(',')
-        formatted_sp_lat = float(f"{float(lat_str):.{TRACK_POINT_DECIMAL_PLACES}f}")
-        formatted_sp_lon = float(f"{float(lon_str):.{TRACK_POINT_DECIMAL_PLACES}f}")
-        extracted_signpoints_coords.append({'latitude': formatted_sp_lat, 'longitude': formatted_sp_lon})
+    interval_seconds = int(config.get('INTERVAL_SECONDS', 3))
+    if interval_seconds <= 0:
+        interval_seconds = 3
 
-    extracted_signpoints_coords.sort(
-        key=lambda p: haversine_distance(config['START_LATITUDE'], config['START_LONGITUDE'], p['latitude'], p['longitude']))
-    all_path_segments.extend(extracted_signpoints_coords)
-    all_path_segments.append({'latitude': config['END_LATITUDE'], 'longitude': config['END_LONGITUDE']})
+    # 计算每个采样点的数量（包含起点和终点）
+    num_intervals = max(1, math.ceil(total_duration_sec / interval_seconds))
+    # 为保证覆盖终点，点数为 num_intervals + 1
+    num_points = num_intervals + 1
+
+    # 计算每秒速度（m/s）
+    speed_mps = target_distance_m / total_duration_sec if total_duration_sec > 0 else config.get('RUNNING_SPEED_MPS', 2.5)
+
+    # 起点经纬度
+    start_lat = float(config.get('START_LATITUDE', 31.031599))
+    start_lon = float(config.get('START_LONGITUDE', 121.442938))
+
+    # 简单的经度偏移计算：在相同纬度上向东移动累计距离以达到目标距离。
+    # 1度纬度约等于 111111 米，1度经度约等于 111111 * cos(lat) 米
+    lat_rad = math.radians(start_lat)
+    meters_per_degree_lon = 111111 * math.cos(lat_rad)
 
     full_interpolated_points_with_time = []
-    total_overall_distance = 0
 
-    current_locatetime_ms = config['START_TIME_EPOCH_MS'] if config['START_TIME_EPOCH_MS'] is not None else get_current_epoch_ms()
+    current_locatetime_ms = config['START_TIME_EPOCH_MS'] if config.get('START_TIME_EPOCH_MS') is not None else get_current_epoch_ms()
 
-    for i in range(len(all_path_segments) - 1):
+    for i in range(num_points):
         if stop_check_cb and stop_check_cb():
-            log_output("轨迹插值被中断。", "warning")
+            log_output("轨迹生成被中断。", "warning")
             raise SportsUploaderError("任务已停止。")
 
-        p1_coord = all_path_segments[i]
-        p2_coord = all_path_segments[i + 1]
+        elapsed_sec = min(i * interval_seconds, total_duration_sec)
+        traveled_m = min(elapsed_sec * speed_mps, target_distance_m)
 
-        segment_interpolated_points, segment_distance, segment_duration_sec = interpolate_points(
-            p1_coord['latitude'], p1_coord['longitude'], p2_coord['latitude'], p2_coord['longitude'], config['RUNNING_SPEED_MPS'],
-            config['INTERVAL_SECONDS']
-        )
+        delta_lon_deg = traveled_m / meters_per_degree_lon if meters_per_degree_lon != 0 else 0
+        point_lat = start_lat
+        point_lon = start_lon + delta_lon_deg
 
-        if full_interpolated_points_with_time and segment_interpolated_points:
-            last_point_in_full = full_interpolated_points_with_time[-1]['latLng']
-            first_point_in_segment = segment_interpolated_points[0]['latLng']
+        formatted_lat = f"{point_lat:.{TRACK_POINT_DECIMAL_PLACES}f}"
+        formatted_lon = f"{point_lon:.{TRACK_POINT_DECIMAL_PLACES}f}"
 
-            if abs(last_point_in_full['latitude'] - first_point_in_segment['latitude']) < 1e-10 and \
-                    abs(last_point_in_full['longitude'] - first_point_in_segment['longitude']) < 1e-10:
-                segment_interpolated_points = segment_interpolated_points[1:]
+        point = {
+            "latLng": {"latitude": float(formatted_lat), "longitude": float(formatted_lon)},
+            "location": f"{formatted_lon},{formatted_lat}",
+            "step": 0,
+            "locatetime": current_locatetime_ms
+        }
 
-        for point in segment_interpolated_points:
-            point['locatetime'] = current_locatetime_ms
-            full_interpolated_points_with_time.append(point)
-            current_locatetime_ms += config['INTERVAL_SECONDS'] * 1000
+        full_interpolated_points_with_time.append(point)
+        current_locatetime_ms += interval_seconds * 1000
 
-        total_overall_distance += segment_distance
+    total_overall_distance = target_distance_m
 
     actual_total_duration_sec = 0
     if full_interpolated_points_with_time:

@@ -6,7 +6,7 @@ import time
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTextEdit, QProgressBar, QFormLayout, QGroupBox, QDateTimeEdit,
-    QMessageBox, QScrollArea, QSizePolicy, QFileDialog, QCheckBox,
+    QMessageBox, QScrollArea, QSizePolicy, QCheckBox,
     QSpacerItem
 )
 from PySide6.QtCore import QThread, Signal, QDateTime, Qt, QUrl
@@ -14,7 +14,11 @@ from PySide6.QtGui import QTextCursor, QFont, QColor, QTextCharFormat, QPalette,
 
 from src.main import run_sports_upload
 from src.utils import SportsUploaderError, get_base_path
-from src.config_manager import ConfigManager, CONFIGS_DIR, DEFAULT_CONFIG_FILE_NAME
+
+# Minimal config support migrated here so file src/config_manager.py can be removed.
+CONFIGS_DIR = os.path.join(get_base_path(), "configs")
+
+
 from src.help_dialog import HelpDialog
 
 RESOURCES_SUB_DIR = "assets"
@@ -73,15 +77,14 @@ class SportsUploaderUI(QWidget):
 
         self.thread = None
         self.config = {}
-        self.current_config_filename = DEFAULT_CONFIG_FILE_NAME
 
         self.setup_ui_style()
         self.init_ui()
-        self.load_settings_to_ui(self.current_config_filename)
 
-        self.setGeometry(100, 100, 800, 950)
-        self.setMinimumSize(500, 650)
+        self.setGeometry(100, 100, 300, 500)
+        self.setMinimumSize(300, 500)
 
+        # 根据当前窗口宽度调整内容区域宽度
         self.adjust_content_width(self.width())
 
     def setup_ui_style(self):
@@ -90,11 +93,13 @@ class SportsUploaderUI(QWidget):
         palette.setColor(QPalette.Window, QColor(255, 255, 255))
         palette.setColor(QPalette.WindowText, QColor(30, 30, 30))
         palette.setColor(QPalette.Base, QColor(255, 255, 255))
-        palette.setColor(QPalette.AlternateBase, QColor(240, 240, 240))
+        # 将 AlternateBase 设置为白色，移除灰色背景
+        palette.setColor(QPalette.AlternateBase, QColor(255, 255, 255))
         palette.setColor(QPalette.ToolTipBase, QColor(255, 255, 255))
         palette.setColor(QPalette.ToolTipText, QColor(30, 30, 30))
         palette.setColor(QPalette.Text, QColor(30, 30, 30))
-        palette.setColor(QPalette.Button, QColor(225, 225, 225))
+        # 使用白色按钮背景以避免灰色感
+        palette.setColor(QPalette.Button, QColor(255, 255, 255))
         palette.setColor(QPalette.ButtonText, QColor(30, 30, 30))
         palette.setColor(QPalette.BrightText, QColor("red"))
         palette.setColor(QPalette.Link, QColor(0, 120, 212))
@@ -103,6 +108,11 @@ class SportsUploaderUI(QWidget):
         self.setPalette(palette)
 
         self.setStyleSheet("""
+            /* 强制全局背景为白色，移除任何灰色背景 */
+            QWidget, QScrollArea, QGroupBox {
+                background-color: rgb(255, 255, 255);
+            }
+
             QGroupBox {
                 font-size: 11pt;
                 font-weight: bold;
@@ -151,14 +161,16 @@ class SportsUploaderUI(QWidget):
                 background-color: rgb(0, 77, 140);
             }
             QPushButton:disabled {
-                background-color: rgb(204, 204, 204);
+                /* 移除灰色背景，禁用状态使用白色背景并保持灰色文本以示区分 */
+                background-color: rgb(255, 255, 255);
                 color: rgb(106, 106, 106);
             }
             QProgressBar {
                 border: 1px solid rgb(220, 220, 220);
                 border-radius: 5px;
                 text-align: center;
-                background-color: rgb(240, 240, 240);
+                /* 进度条背景改为白色，去掉灰色 */
+                background-color: rgb(255, 255, 255);
                 color: rgb(30, 30, 30);
             }
             QProgressBar::chunk {
@@ -184,7 +196,8 @@ class SportsUploaderUI(QWidget):
                 height: 16px;
                 border-radius: 3px;
                 border: 1px solid rgb(142, 142, 142);
-                background-color: rgb(248, 248, 248);
+                /* 去除略灰的背景色，使用白色 */
+                background-color: rgb(255, 255, 255);
             }
             QCheckBox::indicator:checked {
                 background-color: rgb(0, 120, 212);
@@ -192,7 +205,8 @@ class SportsUploaderUI(QWidget):
             }
             QCheckBox::indicator:disabled {
                 border: 1px solid rgb(204, 204, 204);
-                background-color: rgb(225, 225, 225);
+                /* 去掉灰色背景，使用白色 */
+                background-color: rgb(255, 255, 255);
             }
             QFormLayout QLabel {
                 padding-top: 5px;
@@ -209,6 +223,7 @@ class SportsUploaderUI(QWidget):
             }
             #stopButton {
                 background-color: rgb(220, 53, 69);
+                color: white;
             }
             #stopButton:hover {
                 background-color: rgb(179, 43, 56);
@@ -233,14 +248,16 @@ class SportsUploaderUI(QWidget):
 
         self.center_widget = QWidget()
         main_layout = QVBoxLayout(self.center_widget)
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(10)
+        # 保留一点下边距（8px），其余边距为 0
+        main_layout.setContentsMargins(0, 0, 0, 8)
+        main_layout.setSpacing(0)
 
         self.scroll_area = QScrollArea()
         self.scroll_content = QWidget()
         scroll_layout = QVBoxLayout(self.scroll_content)
-        scroll_layout.setContentsMargins(10, 10, 10, 10)
-        scroll_layout.setSpacing(8)
+        # 去除滚动内容区域的外部空白
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(0)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.scroll_content)
 
@@ -277,29 +294,7 @@ class SportsUploaderUI(QWidget):
         user_group.setLayout(user_form_layout)
         scroll_layout.addWidget(user_group)
 
-        route_group = QGroupBox("跑步路线配置")
-        route_form_layout = QFormLayout()
-        self.start_lat_input = QLineEdit()
-        self.start_lon_input = QLineEdit()
-        self.end_lat_input = QLineEdit()
-        self.end_lon_input = QLineEdit()
-        route_form_layout.addRow("起点纬度 (LAT):", self.start_lat_input)
-        route_form_layout.addRow("起点经度 (LON):", self.start_lon_input)
-        route_form_layout.addRow("终点纬度 (LAT):", self.end_lat_input)
-        route_form_layout.addRow("终点经度 (LON):", self.end_lon_input)
-        route_group.setLayout(route_form_layout)
-        scroll_layout.addWidget(route_group)
-
-        param_group = QGroupBox("跑步参数配置")
-        param_form_layout = QFormLayout()
-        self.speed_input = QLineEdit()
-        self.speed_input.setPlaceholderText("例如: 2.5 (米/秒, 约9公里/小时)")
-        self.interval_input = QLineEdit()
-        self.interval_input.setPlaceholderText("例如: 3 (秒)")
-        param_form_layout.addRow("跑步速度 (米/秒):", self.speed_input)
-        param_form_layout.addRow("轨迹点采样间隔 (秒):", self.interval_input)
-        param_group.setLayout(param_form_layout)
-        scroll_layout.addWidget(param_group)
+        # 路线与参数由代码内部控制，不在 GUI 中显示
 
         time_group = QGroupBox("跑步时间配置")
         time_layout = QVBoxLayout()
@@ -319,18 +314,7 @@ class SportsUploaderUI(QWidget):
         time_group.setLayout(time_layout)
         scroll_layout.addWidget(time_group)
 
-        config_button_layout = QHBoxLayout()
-        self.load_default_button = QPushButton("加载默认配置")
-        self.load_default_button.clicked.connect(lambda: self.load_settings_to_ui(DEFAULT_CONFIG_FILE_NAME))
-        self.save_as_button = QPushButton("保存配置为...")
-        self.save_as_button.clicked.connect(self.save_settings_as_dialog)
-        self.save_current_button = QPushButton("保存当前配置")
-        self.save_current_button.clicked.connect(lambda: self.save_current_settings(self.current_config_filename))
-
-        config_button_layout.addWidget(self.load_default_button)
-        config_button_layout.addWidget(self.save_as_button)
-        config_button_layout.addWidget(self.save_current_button)
-        scroll_layout.addLayout(config_button_layout)
+        # 配置保存/加载功能从界面移除
 
         action_button_layout = QHBoxLayout()
         self.start_button = QPushButton("开始上传")
@@ -362,9 +346,8 @@ class SportsUploaderUI(QWidget):
         self.log_output_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         scroll_layout.addWidget(self.log_output_area)
 
-        top_h_layout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        # 直接将 center_widget 加入布局，移除左右的 spacer 以消除外部空白
         top_h_layout.addWidget(self.center_widget)
-        top_h_layout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         self.setLayout(top_h_layout)
 
@@ -380,8 +363,10 @@ class SportsUploaderUI(QWidget):
         """
         根据给定的窗口宽度，计算并设置 center_widget 的固定宽度。
         """
-        available_width_for_center_widget = window_width
-        calculated_width = max(480, available_width_for_center_widget // 2)
+        # 不强制很大的最小宽度，使用窗口宽度的 90% 或最大 600 的限制
+        calculated_width = int(min(window_width * 0.9, 600))
+        # 保证最小为 280，以适配窄窗口（比如 300px）
+        calculated_width = max(280, calculated_width)
         self.center_widget.setFixedWidth(calculated_width)
 
     def toggle_time_input(self, checked):
@@ -396,9 +381,6 @@ class SportsUploaderUI(QWidget):
 
 
     def load_settings_to_ui(self, filename):
-        """从指定文件加载配置并填充UI"""
-        self.config = ConfigManager.load_config(filename)
-        self.current_config_filename = filename
         self.setWindowTitle(f"SJTU 体育跑步上传工具 - [{os.path.basename(filename)}]")
 
         full_cookie = self.config.get("COOKIE", "")
@@ -412,15 +394,9 @@ class SportsUploaderUI(QWidget):
             elif part.startswith("JSESSIONID="):
                 jsessionid_val = part.replace("JSESSIONID=", "")
 
-        self.keepalive_input.setText(keepalive_val)
-        self.jsessionid_input.setText(jsessionid_val)
-        self.user_id_input.setText(self.config.get("USER_ID", ""))
-        self.start_lat_input.setText(str(self.config.get("START_LATITUDE", "")))
-        self.start_lon_input.setText(str(self.config.get("START_LONGITUDE", "")))
-        self.end_lat_input.setText(str(self.config.get("END_LATITUDE", "")))
-        self.end_lon_input.setText(str(self.config.get("END_LONGITUDE", "")))
-        self.speed_input.setText(str(self.config.get("RUNNING_SPEED_MPS", "")))
-        self.interval_input.setText(str(self.config.get("INTERVAL_SECONDS", "")))
+            self.keepalive_input.setText(keepalive_val)
+            self.jsessionid_input.setText(jsessionid_val)
+            self.user_id_input.setText(self.config.get("USER_ID", ""))
 
         start_time_ms = self.config.get("START_TIME_EPOCH_MS", None)
         if start_time_ms is not None:
@@ -432,8 +408,6 @@ class SportsUploaderUI(QWidget):
             self.use_current_time_checkbox.setChecked(True)
             self.start_datetime_input.setEnabled(False)
             self.start_datetime_input.setDateTime(QDateTime.currentDateTime())
-
-        self.log_output_text(f"已加载配置文件: {os.path.basename(filename)}", "info")
 
     def get_settings_from_ui(self):
         """从UI获取当前配置并返回字典"""
@@ -451,12 +425,12 @@ class SportsUploaderUI(QWidget):
             current_config = {
                 "COOKIE": combined_cookie,
                 "USER_ID": self.user_id_input.text(),
-                "START_LATITUDE": float(self.start_lat_input.text()),
-                "START_LONGITUDE": float(self.start_lon_input.text()),
-                "END_LATITUDE": float(self.end_lat_input.text()),
-                "END_LONGITUDE": float(self.end_lon_input.text()),
-                "RUNNING_SPEED_MPS": float(self.speed_input.text()),
-                "INTERVAL_SECONDS": int(self.interval_input.text()),
+                "START_LATITUDE": float(self.config.get("START_LATITUDE", 31.031599)),
+                "START_LONGITUDE": float(self.config.get("START_LONGITUDE", 121.442938)),
+                "END_LATITUDE": float(self.config.get("END_LATITUDE", 31.0264)),
+                "END_LONGITUDE": float(self.config.get("END_LONGITUDE", 121.4551)),
+                "RUNNING_SPEED_MPS": round(1000.0 / (3.5 * 60), 3),
+                "INTERVAL_SECONDS": int(self.config.get("INTERVAL_SECONDS", 3)),
                 "HOST": "pe.sjtu.edu.cn",
                 "UID_URL": "https://pe.sjtu.edu.cn/sports/my/uid",
                 "MY_DATA_URL": "https://pe.sjtu.edu.cn/sports/my/data",
@@ -479,36 +453,7 @@ class SportsUploaderUI(QWidget):
         except Exception as e:
             raise Exception(f"获取配置时发生未知错误: {e}")
 
-    def save_current_settings(self, filename):
-        """将当前UI中的配置保存到指定文件。"""
-        try:
-            new_config = self.get_settings_from_ui()
-            if ConfigManager.save_config(new_config, filename):
-                self.config = new_config
-                self.current_config_filename = filename
-                self.setWindowTitle(f"SJTU 体育跑步上传工具 - [{os.path.basename(filename)}]")
-                QMessageBox.information(self, "保存成功", f"配置已成功保存到 '{os.path.basename(filename)}'！")
-
-        except ValueError as e:
-            QMessageBox.critical(self, "输入错误", str(e))
-        except Exception as e:
-            QMessageBox.critical(self, "保存失败", f"保存配置时发生错误: {e}")
-
-    def save_settings_as_dialog(self):
-        """通过文件对话框让用户选择文件名来保存配置。"""
-        if not os.path.exists(CONFIGS_DIR):
-            os.makedirs(CONFIGS_DIR)
-
-        default_filename = os.path.join(CONFIGS_DIR, "custom_config.json")
-        filename, _ = QFileDialog.getSaveFileName(
-            self, "保存配置为", default_filename, "JSON Files (*.json);;All Files (*)"
-        )
-        if filename:
-            base_filename = os.path.basename(filename)
-            self.save_current_settings(base_filename)
-
     def start_upload(self):
-        """开始上传跑步数据"""
         self.log_output_area.clear()
         self.progress_bar.setValue(0)
         self.status_label.setText("状态: 准备中...")
@@ -524,16 +469,12 @@ class SportsUploaderUI(QWidget):
 
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        self.save_current_button.setEnabled(False)
-        self.save_as_button.setEnabled(False)
-        self.load_default_button.setEnabled(False)
         self.use_current_time_checkbox.setEnabled(False)
         self.start_datetime_input.setEnabled(False)
         self.help_button.setEnabled(False)
         self.keepalive_input.setEnabled(False)
         self.jsessionid_input.setEnabled(False)
         self.user_id_input.setEnabled(False)
-
 
         self.thread = WorkerThread(current_config_to_send)
         self.thread.progress_update.connect(self.update_progress)
@@ -580,16 +521,12 @@ class SportsUploaderUI(QWidget):
         """上传任务完成后的处理"""
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
-        self.save_current_button.setEnabled(True)
-        self.save_as_button.setEnabled(True)
-        self.load_default_button.setEnabled(True)
         self.use_current_time_checkbox.setEnabled(True)
         self.start_datetime_input.setEnabled(not self.use_current_time_checkbox.isChecked())
         self.help_button.setEnabled(True)
         self.keepalive_input.setEnabled(True)
         self.jsessionid_input.setEnabled(True)
         self.user_id_input.setEnabled(True)
-
 
         self.progress_bar.setValue(100)
 

@@ -30,17 +30,17 @@ def make_request(method, url, headers, params=None, data=None, log_cb=None, stop
     except requests.exceptions.HTTPError as e:
         log_output(f"HTTP error occurred: {e}", "error", log_cb)
         log_output(f"URL: {url}", "error", log_cb)
-        if response is not None:
-            log_output(f"Response status code: {response.status_code}", "error", log_cb)
-            log_output(f"Response text: {response.text}", "error", log_cb)
+        if response is not None: # pyright: ignore[reportPossiblyUnboundVariable]
+            log_output(f"Response status code: {response.status_code}", "error", log_cb) # pyright: ignore[reportPossiblyUnboundVariable]
+            log_output(f"Response text: {response.text}", "error", log_cb) # type: ignore
             try:
-                log_output(f"Response JSON (if any): {json.dumps(response.json(), indent=2)}", "error", log_cb)
+                log_output(f"Response JSON (if any): {json.dumps(response.json(), indent=2)}", "error", log_cb) # type: ignore
             except json.JSONDecodeError:
-                log_output(f"Response text (non-JSON): {response.text}", "error", log_cb)
+                log_output(f"Response text (non-JSON): {response.text}", "error", log_cb) # type: ignore
         raise SportsUploaderError(f"HTTP Error: {e}")
     except requests.exceptions.ConnectionError as e:
         log_output(f"Connection error occurred: {e}", "error", log_cb)
-        if isinstance(e.args[0], requests.packages.urllib3.exceptions.MaxRetryError) and e.args[0].reason:
+        if isinstance(e.args[0], requests.packages.urllib3.exceptions.MaxRetryError) and e.args[0].reason: # type: ignore
             log_output(f"Underlying reason: {e.args[0].reason}", "error", log_cb)
         raise SportsUploaderError(f"Connection Error: {e}")
     except requests.exceptions.Timeout as e:
@@ -50,8 +50,8 @@ def make_request(method, url, headers, params=None, data=None, log_cb=None, stop
         log_output(f"An unexpected error occurred: {e}", "error", log_cb)
         raise SportsUploaderError(f"Request Error: {e}")
     except json.JSONDecodeError:
-        log_output(f"Failed to decode JSON from response: {response.text if response else 'No response'}", "error", log_cb)
-        raise SportsUploaderError(f"JSON Decode Error: {response.text if response else 'No response'}")
+        log_output(f"Failed to decode JSON from response: {response.text if response else 'No response'}", "error", log_cb) # type: ignore
+        raise SportsUploaderError(f"JSON Decode Error: {response.text if response else 'No response'}") # type: ignore
 
 
 def get_authorization_token_and_rules(config, log_cb=None, stop_check_cb=None):
@@ -159,5 +159,4 @@ def upload_running_data(config, auth_token, running_data, log_cb=None, stop_chec
         log_cb=log_cb,
         stop_check_cb=stop_check_cb
     )
-    log_output(f"Upload Response: {json.dumps(response, indent=2)}", callback=log_cb)
     return response
