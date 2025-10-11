@@ -2,7 +2,7 @@ import time
 import datetime
 from src.api_client import get_authorization_token_and_rules, upload_running_data
 from src.data_generator import generate_running_data_payload
-from src.utils import log_output, SportsUploaderError, get_current_epoch_ms
+from utils.auxiliary_util import log_output, SportsUploaderError, get_current_epoch_ms
 
 def run_sports_upload(config, progress_callback=None, log_cb=None, stop_check_cb=None):
     """
@@ -11,7 +11,6 @@ def run_sports_upload(config, progress_callback=None, log_cb=None, stop_check_cb
     log_cb: 接收 (message, level)
     stop_check_cb: 一个函数，调用时返回True表示请求停止
     """
-    log_output("--- Starting Sports Upload Process ---", callback=log_cb)
 
     if stop_check_cb and stop_check_cb():
         log_output("任务被请求停止，正在退出...", "warning", log_cb)
@@ -32,10 +31,9 @@ def run_sports_upload(config, progress_callback=None, log_cb=None, stop_check_cb
         auth_token_for_upload, _ = get_authorization_token_and_rules(config, log_cb=log_cb, stop_check_cb=stop_check_cb)
 
     except SportsUploaderError as e:
-        log_output(f"身份验证失败: {e}", "error", log_cb)
+        # 将错误返回给上层（UI/线程）处理并记录，避免重复打印同一错误
         return False, str(e)
     except Exception as e:
-        log_output(f"未知错误: {e}", "error", log_cb)
         return False, str(e)
 
     if stop_check_cb and stop_check_cb():
@@ -68,45 +66,81 @@ def run_sports_upload(config, progress_callback=None, log_cb=None, stop_check_cb
         return False, "任务已停止。"
 
     if running_data_payload and auth_token_for_upload:
+        # 生成并上传多次数据，固定起始时间为每天 8:00
         log_output("\n步骤 3/3: 上传跑步数据...", callback=log_cb)
-        if progress_callback: progress_callback(70, 100, "准备上传跑步数据...")
-        try:
+        total_runs = 25
+        success_count = 0
+        fail_count = 0
+
+        # 计算日期列表
+        now = datetime.datetime.now()
+        yesterday = (now - datetime.timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+        start_times = [(yesterday - datetime.timedelta(days=i)).replace(hour=8, minute=0, second=0, microsecond=0) for i in range(total_runs)]
+
+        for idx, start_dt in enumerate(start_times, start=1):
             if stop_check_cb and stop_check_cb():
                 log_output("任务被请求停止，正在退出...", "warning", log_cb)
                 return False, "任务已停止。"
 
-            log_output("尝试上传跑步数据...", callback=log_cb)
-            if progress_callback: progress_callback(90, 100, "上传数据...")
+            # 设置本次发送的开始时间（毫秒）
+            config["START_TIME_EPOCH_MS"] = int(start_dt.timestamp() * 1000)
 
-            response = upload_running_data(
-                config,
-                auth_token_for_upload,
-                running_data_payload,
-                log_cb=log_cb,
-                stop_check_cb=stop_check_cb
-            )
+            try:
+                log_output(f"开始生成第{idx}/{total_runs}条跑步数据，开始时间: {start_dt}", callback=log_cb)
+                running_data_payload, total_dist, total_dur = generate_running_data_payload(
+                    config,
+                    required_signpoints,
+                    {},
+                    log_cb=log_cb,
+                    stop_check_cb=stop_check_cb
+                )
+            except SportsUploaderError as e:
+                log_output(f"生成跑步数据失败（第{idx}/{total_runs}条）: {e}", "error", log_cb)
+                fail_count += 1
+                # 更新已完成计数并继续
+                log_output(f"已完成{idx}/{total_runs}", "info", log_cb)
+                if progress_callback: progress_callback(idx, total_runs, f"已完成{idx}/{total_runs}")
+                continue
+            except Exception as e:
+                log_output(f"未知错误（生成第{idx}/{total_runs}条）: {e}", "error", log_cb)
+                fail_count += 1
+                log_output(f"已完成{idx}/{total_runs}", "info", log_cb)
+                if progress_callback: progress_callback(idx, total_runs, f"已完成{idx}/{total_runs}")
+                continue
 
-            if response.get('code') == 0 and response.get('data'):
-                log_output("上传成功！", callback=log_cb)
-                if progress_callback: progress_callback(100, 100, "上传成功！")
-                return True, "上传成功！"
-            elif response.get('code') == 0:
-                # 简短警告，在 GUI 中显示为 [Warring]
-                log_output("[Warring] 上传未完全成功，不会计入总里程", "warning", log_cb)
-                if progress_callback: progress_callback(100, 100, "上传完成")
-                return False, "上传未完全成功，不会计入总里程"
-            else:
-                log_output("上传失败", "error", log_cb)
-                if progress_callback: progress_callback(100, 100, "上传失败！")
-                return False, f"上传失败，响应代码: {response.get('code', 'N/A')}"
-        except SportsUploaderError as e:
-            log_output(f"上传失败: {e}", "error", log_cb)
-            if progress_callback: progress_callback(100, 100, "上传失败！")
-            return False, str(e)
-        except Exception as e:
-            log_output(f"未知错误: {e}", "error", log_cb)
-            if progress_callback: progress_callback(100, 100, "上传失败！")
-            return False, str(e)
+            try:
+                log_output(f"尝试上传第{idx}/{total_runs}条跑步数据...", callback=log_cb)
+                response = upload_running_data(
+                    config,
+                    auth_token_for_upload,
+                    running_data_payload,
+                    log_cb=log_cb,
+                    stop_check_cb=stop_check_cb
+                )
+
+                if response.get('code') == 0 and response.get('data'):
+                    log_output(f"第{idx}/{total_runs}条上传成功", "success", log_cb)
+                    success_count += 1
+                else:
+                    # 出现任何非成功情况均记录为失败但继续下一条
+                    log_output(f"第{idx}/{total_runs}条上传未成功，响应: {response}", "warning", log_cb)
+                    fail_count += 1
+
+            except SportsUploaderError as e:
+                log_output(f"上传失败（第{idx}/{total_runs}条）: {e}", "error", log_cb)
+                fail_count += 1
+            except Exception as e:
+                log_output(f"未知错误（上传第{idx}/{total_runs}条）: {e}", "error", log_cb)
+                fail_count += 1
+
+            log_output(f"已完成{idx}/{total_runs}", "info", log_cb)
+            if progress_callback: progress_callback(idx, total_runs, f"已完成{idx}/{total_runs}")
+
+        # 所有条目处理完成
+        final_msg = f"完成: {success_count}/{total_runs} 成功，{fail_count}/{total_runs} 失败"
+        log_output(final_msg, callback=log_cb)
+        if progress_callback: progress_callback(total_runs, total_runs, "已完成")
+        return True, final_msg
     else:
         log_output("数据生成或认证失败，上传被跳过。", "error", log_cb)
         if progress_callback: progress_callback(100, 100, "上传被跳过！")

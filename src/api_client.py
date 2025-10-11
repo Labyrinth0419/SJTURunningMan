@@ -1,9 +1,9 @@
 import requests
 import json
 from urllib.parse import quote
-from src.utils import log_output, SportsUploaderError
+from utils.auxiliary_util import log_output, SportsUploaderError
 
-def make_request(method, url, headers, params=None, data=None, log_cb=None, stop_check_cb=None):
+def make_request(method, url, headers, params=None, data=None, log_cb=None, stop_check_cb=None, session=None):
     """通用HTTP请求函数"""
     try:
         if stop_check_cb and stop_check_cb():
@@ -14,12 +14,21 @@ def make_request(method, url, headers, params=None, data=None, log_cb=None, stop
 
         response = None
 
-        if method.upper() == 'GET':
-            response = requests.get(url, headers=headers, params=params, timeout=timeout_value)
-        elif method.upper() == 'POST':
-            response = requests.post(url, headers=headers, data=data, timeout=timeout_value)
+        # 如果提供了 session，则用它发起请求以携带 cookies
+        if session is not None:
+            if method.upper() == 'GET':
+                response = session.get(url, headers=headers, params=params, timeout=timeout_value)
+            elif method.upper() == 'POST':
+                response = session.post(url, headers=headers, data=data, timeout=timeout_value)
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
         else:
-            raise ValueError(f"Unsupported HTTP method: {method}")
+            if method.upper() == 'GET':
+                response = requests.get(url, headers=headers, params=params, timeout=timeout_value)
+            elif method.upper() == 'POST':
+                response = requests.post(url, headers=headers, data=data, timeout=timeout_value)
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
 
         if stop_check_cb and stop_check_cb():
             log_output("API响应已获取，但任务被中断。", "warning", log_cb)
@@ -74,16 +83,17 @@ def get_authorization_token_and_rules(config, log_cb=None, stop_check_cb=None):
         "Referer": "https://pe.sjtu.edu.cn/phone/",
         "Accept-Encoding": "gzip, deflate, br, zstd",
         "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Cookie": config["COOKIE"]
     }
 
-    log_output(f"Attempting to get Authorization Token from: {config['UID_URL']}", callback=log_cb)
-    uid_response_data = make_request('GET', config['UID_URL'], common_app_headers, log_cb=log_cb, stop_check_cb=stop_check_cb)
+    # 如果没有提供 SESSION，则继续使用 COOKIE 字符串（向后兼容）
+    if not config.get("SESSION"):
+        common_app_headers["Cookie"] = config.get("COOKIE", "")
+
+    uid_response_data = make_request('GET', config['UID_URL'], common_app_headers, log_cb=log_cb, stop_check_cb=stop_check_cb, session=config.get("SESSION"))
 
     auth_token = None
     if uid_response_data.get('code') == 0 and 'uid' in uid_response_data.get('data', {}):
         auth_token = uid_response_data['data']['uid']
-        log_output(f"Successfully retrieved Authorization Token: {auth_token}", callback=log_cb)
     else:
         raise SportsUploaderError(f"Failed to get Authorization Token: {uid_response_data}")
 
@@ -91,12 +101,10 @@ def get_authorization_token_and_rules(config, log_cb=None, stop_check_cb=None):
         log_output("任务被请求停止，正在退出...", "warning", log_cb)
         raise SportsUploaderError("任务已停止。")
 
-    log_output(f"\nAttempting to get MyData from: {config['MY_DATA_URL']}", callback=log_cb)
     try:
-        make_request('GET', config['MY_DATA_URL'], common_app_headers, log_cb=log_cb, stop_check_cb=stop_check_cb)
-        log_output(f"Successfully sent MyData request.", callback=log_cb)
+        make_request('GET', config['MY_DATA_URL'], common_app_headers, log_cb=log_cb, stop_check_cb=stop_check_cb, session=config.get("SESSION"))
     except Exception as e:
-        log_output(f"Warning: Failed to get MyData (this might be expected or ignorable): {e}", "warning", log_cb)
+        log_output(f"获取数据失败: {e}", "warning", log_cb)
 
     if stop_check_cb and stop_check_cb():
         log_output("任务被请求停止，正在退出...", "warning", log_cb)
@@ -129,8 +137,7 @@ def get_authorization_token_and_rules(config, log_cb=None, stop_check_cb=None):
     params_string = f"?location={quote(current_location_param, safe='')}"
     url = config["POINT_RULE_URL"]
 
-    log_output(f"\nGetting point rules from: {url} with location: {current_location_param}", callback=log_cb)
-    point_rule_response_data = make_request('GET', url + params_string, point_rule_headers, log_cb=log_cb, stop_check_cb=stop_check_cb)
+    point_rule_response_data = make_request('GET', url + params_string, point_rule_headers, log_cb=log_cb, stop_check_cb=stop_check_cb, session=config.get("SESSION"))
 
     return auth_token, point_rule_response_data.get('data', {})
 
@@ -157,6 +164,7 @@ def upload_running_data(config, auth_token, running_data, log_cb=None, stop_chec
         headers,
         data=json.dumps(running_data),
         log_cb=log_cb,
-        stop_check_cb=stop_check_cb
+        stop_check_cb=stop_check_cb,
+        session=config.get("SESSION")
     )
     return response

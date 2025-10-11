@@ -2,7 +2,7 @@ import math
 import uuid
 import time
 import random
-from src.utils import haversine_distance, log_output, TRACK_POINT_DECIMAL_PLACES, get_current_epoch_ms, SportsUploaderError
+from utils.auxiliary_util import haversine_distance, log_output, TRACK_POINT_DECIMAL_PLACES, get_current_epoch_ms, SportsUploaderError
 
 def interpolate_points(start_lat, start_lon, end_lat, end_lon, speed_mps, interval_seconds):
     """
