@@ -22,7 +22,7 @@ def get_timestamp():
 def get_base_path():
     """获取应用程序基础路径：如果已打包（frozen），返回 exe 所在目录，否则返回项目根目录。"""
     if hasattr(sys, 'frozen'):
-        return os.path.dirname(sys.executable)
+        return sys._MEIPASS
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
