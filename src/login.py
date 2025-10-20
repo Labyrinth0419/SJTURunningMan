@@ -46,11 +46,7 @@ def _create_session():
 @retry(retry=retry_if_exception_type(RequestException), wait=wait_fixed(3))
 def _get_login_page(session, url):
     req = session.get(url)
-    if '<div id="login-form">' in req.text:
-        return req.text
-    else:
-        print("网络连接异常！")
-        sys.exit(0)
+    return req.text
 
 # 获得验证码图片(jpeg)
 @retry(retry=retry_if_exception_type(RequestException), wait=wait_fixed(3))
