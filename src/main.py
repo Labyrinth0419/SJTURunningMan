@@ -66,18 +66,19 @@ def run_sports_upload(config, progress_callback=None, log_cb=None, stop_check_cb
         return False, "任务已停止。"
 
     if running_data_payload and auth_token_for_upload:
-        # 生成并上传多次数据，固定起始时间为每天 8:00
+        # 生成并上传数据，固定起始时间为每天 8:00
         log_output("\n步骤 3/3: 上传跑步数据...", callback=log_cb)
-        total_runs = 25
+        total_runs = config.get('RUN_TIMES', 1)  # 从配置获取上传天数
         success_count = 0
         fail_count = 0
 
-        # 计算日期列表
+        # 计算日期列表 - upload for the past N days (yesterday, the day before yesterday, etc.)
         now = datetime.datetime.now()
-        yesterday = (now - datetime.timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
-        start_times = [(yesterday - datetime.timedelta(days=i)).replace(hour=8, minute=0, second=0, microsecond=0) for i in range(total_runs)]
+        run_hour = config.get('RUN_HOUR', 8)  # 从配置获取运行小时，默认为8点
+        # Calculate start times for the past N days (yesterday, the day before yesterday, etc.)
+        start_times = [(now - datetime.timedelta(days=i+1)).replace(hour=run_hour, minute=0, second=0, microsecond=0) for i in range(total_runs)]
 
-        for idx, start_dt in enumerate(start_times, start=1):
+        for idx, start_dt in enumerate(start_times, 1):
             if stop_check_cb and stop_check_cb():
                 log_output("任务被请求停止，正在退出...", "warning", log_cb)
                 return False, "任务已停止。"

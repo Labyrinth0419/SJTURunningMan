@@ -4,8 +4,8 @@ import re
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTextEdit, QProgressBar, QFormLayout, QGroupBox, QDateTimeEdit,
-    QMessageBox, QScrollArea, QSizePolicy, QCheckBox,
-    QSpacerItem
+    QMessageBox, QScrollArea, QSizePolicy, QCheckBox, QComboBox,
+    QSpacerItem, QFileDialog
 )
 from PySide6.QtCore import QThread, Signal, QDateTime, Qt, QUrl, QEvent
 from PySide6.QtGui import QTextCursor, QFont, QColor, QTextCharFormat, QPalette, QBrush, QIcon, QDesktopServices
@@ -29,10 +29,12 @@ class WorkerThread(QThread):
     progress_update = Signal(int, int, str)
     log_output = Signal(str, str)
     finished = Signal(bool, str)
+    route_too_long = Signal(str, str)  # Signal to emit when route is too long
 
     def __init__(self, config_data):
         super().__init__()
         self.config_data = config_data
+        self._continue_after_route_check = True  # Default to continue execution
 
     def run(self):
         success = False
@@ -62,6 +64,22 @@ class WorkerThread(QThread):
         self.progress_update.emit(current, total, message)
 
     def log_callback(self, message, level):
+        # Check if this is a special route too long message
+        if message.startswith("SPECIAL_ROUTE_TOO_LONG:"):
+            # Extract distances from the message
+            parts = message.split(":")
+            if len(parts) >= 3:
+                detailed_distance = float(parts[1])
+                target_distance = float(parts[2])
+                # Set the flag to pause execution
+                self._continue_after_route_check = False
+                # Emit signal to UI to show route too long dialog
+                self.route_too_long.emit(str(detailed_distance), str(target_distance))
+                # Wait until the UI sets a flag to continue
+                while not self._continue_after_route_check:
+                    # Small delay to prevent busy waiting
+                    self.msleep(100)
+                return  # Don't emit the log message when it was a special route message
         self.log_output.emit(message, level)
 
 
@@ -110,37 +128,53 @@ class SportsUploaderUI(QWidget):
         self.setPalette(palette)
 
         self.setStyleSheet("""
-            QWidget, QScrollArea, QGroupBox {
+            /* 基础设置 */
+            QWidget {
                 background-color: rgb(255, 255, 255);
+                color: rgb(51, 51, 51);
+                font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
             }
-
+            
+            /* GroupBox 样式 */
             QGroupBox {
                 font-size: 12pt;
                 font-weight: bold;
                 margin-top: 15px;
                 border: 1px solid rgb(220, 220, 220);
                 border-radius: 6px;
-                padding-top: 25px;
+                padding-top: 10px;
                 padding-bottom: 10px;
+                color: rgb(74, 144, 226);
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 subcontrol-position: top center;
                 padding: 0 8px;
                 color: rgb(74, 144, 226);
+                background-color: rgb(255, 255, 255);
             }
-            QLineEdit, QDateTimeEdit {
+            
+            /* 确保所有标签和输入框可见 */
+            QLabel {
+                color: rgb(51, 51, 51);
+                background-color: transparent;
+                font-size: 9pt;
+            }
+            
+            QLineEdit, QComboBox {
                 background-color: rgb(255, 255, 255);
                 border: 1px solid rgb(204, 204, 204);
                 border-radius: 4px;
                 padding: 8px;
-                selection-background-color: rgb(74, 144, 226);
                 color: rgb(51, 51, 51);
+                font-size: 9pt;
             }
-            QLineEdit:focus, QDateTimeEdit:focus {
+            
+            QLineEdit:focus, QComboBox:focus {
                 border: 1px solid rgb(74, 144, 226);
             }
-            QDateTimeEdit::drop-down {
+            
+            QComboBox::drop-down {
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
                 width: 20px;
@@ -287,6 +321,58 @@ class SportsUploaderUI(QWidget):
         user_group.setLayout(user_form_layout)
         scroll_layout.addWidget(user_group)
 
+        # 添加运行次数和时间选择组件
+        run_settings_group = QGroupBox("上传设置")
+        run_settings_layout = QVBoxLayout()
+        run_settings_layout.setContentsMargins(15, 15, 15, 15)
+
+        # 运行次数选择
+        run_times_layout = QHBoxLayout()
+        self.run_times_combo = QComboBox()
+        self.run_times_combo.addItems(["自定义", "1", "5", "10", "15", "20", "25"])
+        self.run_times_combo.setCurrentIndex(1)  # 默认选择1天
+        run_times_layout.addWidget(QLabel("上传天数:"))
+        run_times_layout.addWidget(self.run_times_combo)
+
+        self.custom_days_input = QLineEdit()
+        self.custom_days_input.setPlaceholderText("输入自定义天数")
+        self.custom_days_input.setVisible(False)  # 默认隐藏
+        run_times_layout.addWidget(self.custom_days_input)
+
+        # 连接下拉框变化事件
+        self.run_times_combo.currentTextChanged.connect(self.on_run_times_changed)
+        
+        run_settings_layout.addLayout(run_times_layout)
+
+        # 运行时间选择
+        run_time_layout = QHBoxLayout()
+        self.run_time_combo = QComboBox()
+        # Add hours from 6 to 23 (6 AM to 11 PM)
+        for hour in range(6, 24):  # 6 AM to 11 PM (23:00)
+            self.run_time_combo.addItem(f"{hour:02d}:00")  # Format as HH:00
+        
+        self.run_time_combo.setCurrentIndex(8-6)  # 默认选择8:00 AM (index 8-6=2)
+        run_time_layout.addWidget(QLabel("跑步时间:"))
+        run_time_layout.addWidget(self.run_time_combo)
+        
+        run_settings_layout.addLayout(run_time_layout)
+
+        # 运行距离选择
+        run_distance_layout = QHBoxLayout()
+        self.run_distance_combo = QComboBox()
+        # Add distances from 1 to 5 km
+        for distance in range(1, 6):  # 1 to 5 km
+            self.run_distance_combo.addItem(f"{distance} km")
+        
+        self.run_distance_combo.setCurrentIndex(4)  # 默认选择5 km (index 4)
+        run_distance_layout.addWidget(QLabel("跑步距离:"))
+        run_distance_layout.addWidget(self.run_distance_combo)
+        
+        run_settings_layout.addLayout(run_distance_layout)
+
+        run_settings_group.setLayout(run_settings_layout)
+        scroll_layout.addWidget(run_settings_group)
+
         action_button_layout = QHBoxLayout()
         action_button_layout.setSpacing(12)
         self.start_button = QPushButton("一键跑步")
@@ -299,6 +385,10 @@ class SportsUploaderUI(QWidget):
         self.stop_button.setEnabled(False)
         self.stop_button.clicked.connect(self.stop_upload)
         action_button_layout.addWidget(self.stop_button)
+
+        self.route_button = QPushButton("生成路线")
+        self.route_button.clicked.connect(self.open_route_generator)
+        action_button_layout.addWidget(self.route_button)
 
         self.info_button = QPushButton("关于")
         self.info_button.clicked.connect(self.show_info_dialog)
@@ -322,6 +412,13 @@ class SportsUploaderUI(QWidget):
         top_h_layout.addWidget(self.center_widget)
 
         self.setLayout(top_h_layout)
+
+    def on_run_times_changed(self, text):
+        """处理运行次数选择变化事件"""
+        if text == "自定义":
+            self.custom_days_input.setVisible(True)
+        else:
+            self.custom_days_input.setVisible(False)
 
     def resizeEvent(self, event):
         """
@@ -361,9 +458,35 @@ class SportsUploaderUI(QWidget):
             username = self.username_input.text().strip()
             password = self.password_input.text()
 
+            # 获取运行次数
+            run_times_text = self.run_times_combo.currentText()
+            if run_times_text == "自定义":
+                custom_days_text = self.custom_days_input.text().strip()
+                if not custom_days_text:
+                    raise ValueError("请输入自定义天数。")
+                try:
+                    run_times = int(custom_days_text)
+                    if run_times <= 0:
+                        raise ValueError("运行次数必须大于0。")
+                except ValueError:
+                    raise ValueError("自定义天数必须是正整数。")
+            else:
+                run_times = int(run_times_text)
+
+            # 获取运行时间（小时）
+            run_time_text = self.run_time_combo.currentText()
+            run_hour = int(run_time_text.split(':')[0])  # Extract hour from "HH:00" format
+
+            # 获取运行距离（公里）
+            run_distance_text = self.run_distance_combo.currentText()
+            run_distance_km = int(run_distance_text.split()[0])  # Extract km from "X km" format
+
             current_config = {
                 "USER_ID": username,
                 "PASSWORD": password,
+                "RUN_TIMES": run_times,  # 添加运行次数配置
+                "RUN_HOUR": run_hour,    # 添加运行小时配置
+                "RUN_DISTANCE_KM": run_distance_km,  # 添加运行距离配置
                 "START_LATITUDE": float(self.config.get("START_LATITUDE", 31.031599)),
                 "START_LONGITUDE": float(self.config.get("START_LONGITUDE", 121.442938)),
                 "END_LATITUDE": float(self.config.get("END_LATITUDE", 31.0264)),
@@ -373,7 +496,7 @@ class SportsUploaderUI(QWidget):
                 "HOST": "pe.sjtu.edu.cn",
                 "UID_URL": "https://pe.sjtu.edu.cn/sports/my/uid",
                 "MY_DATA_URL": "https://pe.sjtu.edu.cn/sports/my/data",
-                "POINT_RULE_URL": "https://pe.sjtu.edu.cn/api/running/point-rule",
+                "POINT_RULE_URL": "https://pe.sjtu.edu.cn/api/running/point-rule",  # Fixed URL
                 "UPLOAD_URL": "https://pe.sjtu.edu.cn/api/running/result/upload"
             }
 
@@ -426,11 +549,96 @@ class SportsUploaderUI(QWidget):
             self.info_button.setEnabled(True)
             return
 
+        # Check if current route exceeds target distance and ask user what to do
+        try:
+            from src.data_generator import read_gps_coordinates_from_file, calculate_route_distance
+            import os
+            
+            # Only look in the project root directory for route files
+            project_root = os.path.dirname(os.path.abspath(__file__))  # qtui.py is in project root
+            user_loc_path = os.path.join(project_root, 'user.txt')
+            default_loc_path = os.path.join(project_root, 'default.txt')
+
+            if os.path.exists(user_loc_path):
+                route_path = user_loc_path
+            else:
+                route_path = default_loc_path
+                # Check if default.txt exists
+                if not os.path.exists(route_path):
+                    raise Exception(f"用户路线文件不存在: {user_loc_path} 和 {route_path} 都不存在")
+
+            route_coordinates = read_gps_coordinates_from_file(route_path)
+            route_distance = calculate_route_distance(route_coordinates)
+            target_distance_m = current_config_to_send.get('RUN_DISTANCE_KM', 5) * 1000  # Convert to meters
+            
+            if route_distance > target_distance_m:
+                from PySide6.QtWidgets import QMessageBox
+                reply = QMessageBox.question(self, "路线距离提醒", 
+                                           f"当前路线长度为 {route_distance/1000:.2f}km，"
+                                           f"超过了您选择的 {current_config_to_send.get('RUN_DISTANCE_KM', 5)}km。\n\n"
+                                           f"您希望：\n"
+                                           f"  - 选择\"是\"：自动削减路线至目标距离\n"
+                                           f"  - 选择\"否\"：按照完整路线进行跑步",
+                                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                           QMessageBox.StandardButton.Yes)
+                
+                if reply == QMessageBox.StandardButton.Yes:
+                    # User wants to truncate to target distance
+                    self.log_output_text("用户选择自动削减路线至目标距离", "info")
+                else:
+                    # User wants to continue with full route
+                    self.log_output_text("用户选择按照完整路线进行跑步", "info")
+                    # Update the target distance to be the actual route distance
+                    # We need to adjust the RUN_DISTANCE_KM to match the route distance
+                    current_config_to_send['RUN_DISTANCE_KM'] = round(route_distance / 1000, 2)
+                    self.log_output_text(f"已更新跑步距离至 {current_config_to_send['RUN_DISTANCE_KM']}km", "info")
+        except Exception as e:
+            self.log_output_text(f"检查路线距离时出现错误: {e}", "error")
+            # Continue anyway, don't block the upload for this check
+
         self._thread = WorkerThread(current_config_to_send)
         self._thread.progress_update.connect(self.update_progress)
         self._thread.log_output.connect(self.log_output_text)
+        self._thread.route_too_long.connect(self.handle_route_too_long)
         self._thread.finished.connect(self.upload_finished)
         self._thread.start()
+
+    def handle_route_too_long(self, detailed_distance_str, target_distance_str):
+        """Handle when the route is too long by showing a dialog to the user."""
+        detailed_distance = float(detailed_distance_str)
+        target_distance = float(target_distance_str)
+        
+        # Show a message box to the user
+        reply = QMessageBox.question(
+            self, 
+            "路线距离提醒", 
+            f"当前路线长度为 {detailed_distance/1000:.2f}km，"
+            f"超过了您选择的 {target_distance/1000:.2f}km。\n\n"
+            f"您希望：\n"
+            f"  - 选择\"是\"：自动削减路线至目标距离\n"
+            f"  - 选择\"否\"：按照完整路线继续跑步\n"
+            f"  - 选择\"取消\"：停止当前任务",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # User wants to truncate to target distance - set flag to continue
+            if self._thread:
+                self._thread._continue_after_route_check = True
+                self.log_output_text("用户选择自动削减路线至目标距离", "info")
+        elif reply == QMessageBox.StandardButton.No:
+            # User wants to continue with full route - set flag to continue
+            if self._thread:
+                self._thread._continue_after_route_check = True
+                self.log_output_text("用户选择按照完整路线进行跑步", "info")
+        else:  # Cancel
+            # User wants to stop - interrupt the thread
+            if self._thread and self._thread.isRunning():
+                self._thread.requestInterruption()
+                self.log_output_text("用户选择停止任务", "info")
+                self.stop_button.setEnabled(False)
+                self.status_label.setText("状态: 正在停止...")
 
     def stop_upload(self):
         """请求工作线程停止。"""
@@ -564,6 +772,56 @@ class SportsUploaderUI(QWidget):
             # 记录异常并弹出对话框，不影响后台线程
             self.log_output_text(f"无法显示关于窗口: {e}", "error")
             QMessageBox.warning(self, "显示失败", f"无法显示关于窗口: {e}")
+
+    def open_route_generator(self):
+        """打开路线规划器"""
+        try:
+            # 将导入移到方法开头，避免作用域问题
+            from src.data_generator import generate_baidu_map_html
+            import os
+            import webbrowser
+
+            # Inform user about the route planning process
+            reply = QMessageBox.question(self, "路线规划", 
+                                    "此功能将启动路线规划器，您可以：\n\n"
+                                    "1. 在浏览器中打开百度地图\n"
+                                    "2. 点击地图采集坐标点形成路线\n"
+                                    "3. 点击\"保存路线\"按钮下载user.txt文件\n"
+                                    "4. 将user.txt文件保存到项目根目录\n\n"
+                                    "注意：user.txt将成为新的默认路线文件\n"
+                                    "是否现在开始？",
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                    QMessageBox.StandardButton.Yes)
+
+            if reply == QMessageBox.StandardButton.Yes:
+                # Generate the route planner HTML with the provided API key
+                try:
+                    map_path = generate_baidu_map_html()
+                    webbrowser.open(f'file://{os.path.abspath(map_path)}')
+                    
+                    QMessageBox.information(self, "路线规划器", 
+                                        "路线规划器已在浏览器中打开！\n\n"
+                                        "请在地图上点击选择路径坐标点，\n"
+                                        "点击\"保存路线\"按钮将下载user.txt文件，\n"
+                                        "请将user.txt保存到项目根目录以替换默认路线。")
+                except Exception as e:
+                    QMessageBox.critical(self, "错误", f"生成路线规划器失败：\n{str(e)}")
+            else:
+                # Check if user.txt exists
+                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                user_txt_path = os.path.join(project_root, 'user.txt') 
+                
+                if os.path.exists(user_txt_path):
+                    QMessageBox.information(self, "当前路线", 
+                                        "将使用当前路线文件：user.txt\n\n"
+                                        "如需修改路线，请选择\"生成路线\"按钮并创建新路线。")
+                else:
+                    QMessageBox.information(self, "默认路线", 
+                                        "将使用默认路线文件：default.txt\n\n"
+                                        "如需修改路线，请选择\"生成路线\"按钮并创建自定义路线。")
+                    
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"打开路线规划器时出错：\n{str(e)}")
 
     def eventFilter(self, watched, event):
         """拦截 HelpWidget 的 Close/Hide 事件，清理保存的引用以允许再次打开。"""

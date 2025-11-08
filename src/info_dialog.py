@@ -125,7 +125,7 @@ class Ui_HelpWindow(object):
     def retranslateUi(self, HelpWindow):
         HelpWindow.setWindowTitle(QCoreApplication.translate("HelpWindow", u"关于本工具", None))
         self.backgroundLabel.setText("")
-        self.infoLabel.setText(QCoreApplication.translate("HelpWindow", u"<html><head/><body><p>二改：Github@accelerator-s</p><p>原作者：Github@Labyrinth0419</p><p>Version: " + config.global_version + "</p></body></html>", None))
+        self.infoLabel.setText(QCoreApplication.translate("HelpWindow", u"<html><head/><body><p>三改：Github@JackyTJie</p><p>二改：Github@accelerator-s</p><p>原作者：Github@Labyrinth0419</p><p>Version: " + config.global_version + "</p></body></html>", None))
         self.avatarLabel.setText("")
         self.okButton.setText(QCoreApplication.translate("HelpWindow", u"确定", None))
         self.thankYouLabel.setText(QCoreApplication.translate("HelpWindow", u"<html><head/><body><p><span style=\" font-size:20pt;\">感谢您的使用！</span></p></body></html>", None))
