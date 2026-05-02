@@ -8,9 +8,15 @@
 
 本工具支持自定义跑步天数、时间和距离，帮助用户灵活完成体育锻炼要求。默认配置会生成从上一日开始的连续指定天数的跑步记录（默认为1天），每次跑步5km，时间为8:00。程序优先使用user.txt作为路线文件，若不存在则使用default.txt作为默认路线文件。
 
+## 新功能
+
+- 跑步时间随机化
+- 异地登陆
+- 安卓版本 
+
 ## 功能特性
 
-### 1. 图形用户界面 (GUI)
+### 1. 图形用户界面
 
 **用户配置区域:**
 
@@ -21,6 +27,7 @@
 
 - **上传天数选择**: 从预设选项（1, 5, 10, 15, 20, 25天）中选择或选择"自定义"输入自定义天数
 - **跑步时间选择**: 从6:00-23:00的小时选项中选择跑步发生时间（默认8:00），或选择"自定义时间"输入精确到秒的时间
+  - **新增功能**: 每次跑步时间会自动添加随机波动（±10分钟和±30秒），使跑步时间更真实自然
 - **开始日期选择**: 输入开始日期（默认为昨天），系统将从该日期向前生成历史记录
 - **跑步距离选择**: 从1-5公里范围内选择每次跑步的距离（默认5公里）
 
@@ -37,54 +44,11 @@
 - **状态标签**: 显示当前操作状态
 - **日志输出区域**: 显示详细的操作日志信息（成功、失败、警告等不同颜色标识）
 
-### 2. 命令行界面 (CLI)
-
-**基本用法:**
-
-```bash
-python cliui.py -u <username> -p <password> -d 5.0
-```
-
-**主要参数选项:**
-
-- `--username, -u`: 学号/用户名
-- `--password, -p`: 密码
-- `--distance, -d`: 跑步距离 (km)，默认5.0km
-- `--hour, -H`: 跑步时间 (小时)，默认8点
-- `--minute`: 跑步时间 (分钟)，默认0分，与--hour配合使用
-- `--start-date`: 开始日期 (YYYY-MM-DD格式)，默认从昨天开始向过去生成记录
-- `--times, -t`: 上传天数，默认1天
-- `--pace, -P`: 配速 (分钟/公里)，默认3.5 min/km
-
-**路线选择选项:**
-
-- `--route, -r`: 选择路线文件 (default/user)，默认default
-- `--route-file`: 指定自定义路线文件路径
-- `--customize-route, -C`: 打开浏览器进行路线自定义规划
-
-**高级开发选项:**
-
-- `--speed-override, -s`: 速度覆写 (m/s)，直接指定跑步速度
-- `--compensation, -c`: 补偿距离 (米)，默认200米
-- `--interval, -i`: GPS点间隔 (秒)，默认3秒
-- `--verify-credentials`: 验证凭据但不上传数据
-- `--verbose, -v`: 启用详细输出
-- `--debug-mode`: 启用调试模式
-- `--dry-run`: 干运行模式（模拟运行不上传）
-
-**API端点选项（用于开发/测试）:**
-
-- `--host`: API主机地址，默认pe.sjtu.edu.cn
-- `--uid-url`: UID API URL
-- `--my-data-url`: 我的数据API URL
-- `--point-rule-url`: 点规则API URL
-- `--upload-url`: 上传API URL
-
-### 3. 路线规划器
+### 2. 路线规划器
 
 **图形化路线自定义:**
 
-- 点击"生成路线"或使用CLI的`--customize-route`参数打开路线规划器
+- 点击"生成路线"按钮打开路线规划器
 - 在百度地图界面中点击选择路径坐标点，形成跑步路线
 - 支持添加、删除、清空坐标点
 - 点击"保存路线"按钮将下载user.txt文件
@@ -157,7 +121,6 @@ python cliui.py -u <username> -p <password> -d 5.0
 
 ## 使用方法
 
-### GUI界面使用方法
 
 1. **启动GUI界面**:
 
@@ -186,90 +149,14 @@ python cliui.py -u <username> -p <password> -d 5.0
    - 点击"保存路线"下载user.txt文件
    - 将user.txt保存到项目根目录后重新运行程序
 
-### CLI界面使用方法
-
-1. **基本上传**:
-
-   ```bash
-   python cliui.py -u <学号> -p <密码> -d 5.0
-   ```
-
-2. **指定多天上传**:
-
-   ```bash
-   python cliui.py -u <学号> -p <密码> -d 5.0 -t 5
-   ```
-
-3. **自定义跑步时间**:
-
-   ```bash
-   python cliui.py -u <学号> -p <密码> -d 3.0 -H 18
-   ```
-
-4. **自定义跑步时间（精确到分钟）**:
-
-   ```bash
-   python cliui.py -u <学号> -p <密码> -d 3.0 -H 18 -minute 30
-   ```
-
-5. **自定义开始日期**:
-
-   ```bash
-   python cliui.py -u <学号> -p <密码> -d 5.0 --start-date 2025-01-01 -t 5
-   ```
-
-6. **使用自定义路线**:
-
-   ```bash
-   python cliui.py -u <学号> -p <密码> -d 5.0 -r user
-   ```
-
-7. **高级参数设置**:
-
-   ```bash
-   python cliui.py -u <学号> -p <密码> -d 3.0 -P 4.0 -c 200 -s 3.0
-   ```
-
-8. **验证凭据**:
-
-   ```bash
-   python cliui.py -u <学号> --verify-credentials --verbose
-   ```
-
-9. **干运行模式**:
-
-   ```bash
-   python cliui.py -u <学号> -p <密码> -d 5.0 --dry-run
-   ```
-
-10. **打开路线规划器**:
-
-```bash
-python cliui.py --customize-route
-```
 
 ### 路线自定义方法
 
-1. **使用GUI**:
-   - 点击"生成路线"按钮
-   - 在打开的浏览器中点击地图选择路线坐标点
-   - 点击"保存路线"下载user.txt文件
-   - 将user.txt文件保存到项目根目录
+- 点击"生成路线"按钮
+- 在打开的浏览器中点击地图选择路线坐标点
+- 点击"保存路线"下载user.txt文件
+- 将user.txt文件保存到项目根目录
 
-2. **使用CLI**:
-   - 运行 `python cliui.py --customize-route`
-   - 后续步骤同GUI方式
-
-3. **手动创建路线文件**:
-   - 创建名为user.txt的文件
-   - 每行包含一个坐标点，格式为 "经度,纬度"
-   - 例如：
-
-     ```
-     121.442938,31.031599
-     121.443000,31.031600
-     121.443100,31.031700
-     ```
 
 ## 重要提醒
 
@@ -283,7 +170,7 @@ python cliui.py --customize-route
 ## 🙏 致谢
 
 - **原项目作者**: [@Labyrinth0419](https://github.com/Labyrinth0419) - 创建了优秀的原项目
-- **原增强版作者**: [@accelerator-s](https://github.com/accelerator-s) - 添加了新功能和改进
+- **原增强版作者**: [@accelerator-s](https://github.com/accelerator-s) - 添加了新功能和改进以及对异地的修复
 
 ## 免责声明
 
@@ -291,4 +178,7 @@ python cliui.py --customize-route
 
 ---
 
-**Last Update: Wednesday, November 19, 2025**
+**Last Update: Wednesday, May 2, 2026**
+
+---
+*五一小长假万岁*

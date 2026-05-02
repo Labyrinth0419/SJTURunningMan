@@ -1,5 +1,6 @@
 import time
 import datetime
+import random
 from src.api_client import get_authorization_token_and_rules, upload_running_data
 from src.data_generator import generate_running_data_payload
 from utils.auxiliary_util import log_output, SportsUploaderError, get_current_epoch_ms
@@ -70,14 +71,26 @@ def run_sports_upload(config, progress_callback=None, log_cb=None, stop_check_cb
                 # Set the time using RUN_HOUR, RUN_MINUTE, and RUN_SECOND
                 start_date = start_date.replace(hour=run_hour, minute=run_minute, second=run_second, microsecond=0)
                 # Calculate start times going backwards from the custom start date
-                start_times = [start_date - datetime.timedelta(days=i) for i in range(total_runs)]
+                base_start_times = [start_date - datetime.timedelta(days=i) for i in range(total_runs)]
             except ValueError:
                 # If date parsing fails, fall back to default behavior
                 log_output(f"日期解析失败，使用默认日期: {start_date_str}，格式应为 YYYY-MM-DD", "warning", log_cb)
-                start_times = [(now - datetime.timedelta(days=i+1)).replace(hour=run_hour, minute=run_minute, second=run_second, microsecond=0) for i in range(total_runs)]
+                base_start_times = [(now - datetime.timedelta(days=i+1)).replace(hour=run_hour, minute=run_minute, second=run_second, microsecond=0) for i in range(total_runs)]
         else:
             # Calculate start times for the past N days (yesterday, the day before yesterday, etc.)
-            start_times = [(now - datetime.timedelta(days=i+1)).replace(hour=run_hour, minute=run_minute, second=run_second, microsecond=0) for i in range(total_runs)]
+            base_start_times = [(now - datetime.timedelta(days=i+1)).replace(hour=run_hour, minute=run_minute, second=run_second, microsecond=0) for i in range(total_runs)]
+        
+        # 添加随机时间波动（±10分钟和±30秒）
+        start_times = []
+        for base_dt in base_start_times:
+            # 生成随机分钟偏移（-10到+10分钟）
+            minute_offset = random.randint(-10, 10)
+            # 生成随机秒钟偏移（-30到+30秒）
+            second_offset = random.randint(-30, 30)
+            
+            # 应用偏移
+            adjusted_dt = base_dt + datetime.timedelta(minutes=minute_offset, seconds=second_offset)
+            start_times.append(adjusted_dt)
 
         for idx, start_dt in enumerate(start_times, 1):
             if stop_check_cb and stop_check_cb():
