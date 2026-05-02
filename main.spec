@@ -8,7 +8,6 @@ a = Analysis(
     binaries=[],
     datas=[
         ('assets', 'assets'),
-        ('default.txt', '.'),
     ],
     hiddenimports=[
         'PySide6.QtCore',

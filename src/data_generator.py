@@ -7,7 +7,7 @@ from utils.auxiliary_util import haversine_distance, log_output, TRACK_POINT_DEC
 
 def read_gps_coordinates_from_file(file_path):
     """
-    从default.txt文件中读取GPS坐标
+    从文件中读取GPS坐标
     返回格式为[(longitude, latitude), ...]的列表
     """
     coordinates = []
@@ -28,11 +28,56 @@ def read_gps_coordinates_from_file(file_path):
     except Exception as e:
         log_output(f"读取位置文件时出错: {e}", "error")
         raise SportsUploaderError(f"读取位置文件时出错: {e}")
-    
+
     if not coordinates:
         raise SportsUploaderError("GPS坐标文件为空或格式错误")
-    
+
     return coordinates
+
+
+def get_default_coordinates():
+    """
+    返回硬编码的默认GPS坐标
+    格式为[(longitude, latitude), ...]的列表
+    """
+    # 硬编码的default.txt内容
+    default_coordinates = [
+        (121.43680706489432, 31.027665038002322),
+        (121.43692833613818, 31.027541257648274),
+        (121.43703613279938, 31.02741360898802),
+        (121.43713494640546, 31.027266619407648),
+        (121.43716189557077, 31.02704226644857),
+        (121.43719333626362, 31.026903012619336),
+        (121.43727418375951, 31.02665158157359),
+        (121.43732359056257, 31.02648138171604),
+        (121.43723376001157, 31.026373072555867),
+        (121.43709003112997, 31.026222213161212),
+        (121.43700469210653, 31.02611390370344),
+        (121.43703164127183, 31.025966912097502),
+        (121.43704960738202, 31.025738687834345),
+        (121.43705409890957, 31.025649718904198),
+        (121.43709452265752, 31.025514331240768),
+        (121.43711698029527, 31.025421493873534),
+        (121.43712147182282, 31.025274501188534),
+        (121.43714392946058, 31.025119771798952),
+        (121.43714842098812, 31.025019197559615),
+        (121.43696875988613, 31.02494183268714),
+        (121.43675765809128, 31.024910886720395),
+        (121.43645672574544, 31.024794839254636),
+        (121.43629503075364, 31.024752288481416),
+        (121.436012064518, 31.02543309854944),
+        (121.43545960662937, 31.026473645351572),
+        (121.43508680984272, 31.027104156973348),
+        (121.43533833538551, 31.027274355707064),
+        (121.43567969147931, 31.027421345275375),
+        (121.4359581661874, 31.027541257648274),
+        (121.4361198611792, 31.02756446647703),
+        (121.43633545450159, 31.02764569733272),
+        (121.43654206476889, 31.027649565466955),
+        (121.43673070892598, 31.027665038002322),
+        (121.43681604794943, 31.027665038002322)
+    ]
+    return default_coordinates
 
 
 def generate_baidu_map_html(ak="MYUXpppuOOvq99cP2AmDvplAW76VV8vr"):
@@ -739,10 +784,10 @@ def generate_running_data_payload(config, required_signpoints, point_rules_data,
     """
     生成符合POST请求体格式的跑步数据，并整合打卡点。
     """
-    # 优先从user.txt文件读取GPS坐标（默认路线），如果不存在则使用default.txt（备用路线）
+    # 优先从user.txt文件读取GPS坐标，如果不存在则使用硬编码的默认路线
     from utils.auxiliary_util import get_base_path
     base_path = get_base_path()
-    
+
     # Check if a specific route file was provided in config (for CLI)
     config_route_file = config.get('ROUTE_FILE')
     if config_route_file:
@@ -755,25 +800,23 @@ def generate_running_data_payload(config, required_signpoints, point_rules_data,
             log_output(f"配置指定路线文件不存在: {config_route_file}，尝试默认文件", "warning", log_cb)
             # Fallback to the original logic - load this after
             user_loc_path = os.path.join(base_path, 'user.txt')
-            default_loc_path = os.path.join(base_path, 'default.txt')
-            
+
             if os.path.exists(user_loc_path):
                 log_output(f"使用当前路线文件: user.txt", "info", log_cb)
                 original_coordinates = read_gps_coordinates_from_file(user_loc_path)
             else:
-                log_output(f"使用默认路线文件: default.txt", "info", log_cb)
-                original_coordinates = read_gps_coordinates_from_file(default_loc_path)
+                log_output(f"使用硬编码默认路线", "info", log_cb)
+                original_coordinates = get_default_coordinates()
     else:
-        # Original behavior: try user.txt, fallback to default.txt
+        # Original behavior: try user.txt, fallback to hardcoded default
         user_loc_path = os.path.join(base_path, 'user.txt')
-        default_loc_path = os.path.join(base_path, 'default.txt')
 
         if os.path.exists(user_loc_path):
             log_output(f"使用当前路线文件: user.txt", "info", log_cb)
             original_coordinates = read_gps_coordinates_from_file(user_loc_path)
         else:
-            log_output(f"使用默认路线文件: default.txt", "info", log_cb)
-            original_coordinates = read_gps_coordinates_from_file(default_loc_path)
+            log_output(f"使用硬编码默认路线", "info", log_cb)
+            original_coordinates = get_default_coordinates()
 
 
     longitude_offset = -0.00651271494735 + 0.000094 # 负值以校正向东偏移
