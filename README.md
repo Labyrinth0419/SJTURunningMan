@@ -1,6 +1,6 @@
-# SJTU 一键校园跑工具 4.0.0 说明
+# SJTU 一键校园跑工具 4.2.0 说明
 
-欢迎使用 SJTU 一键校园跑工具 4.0.0 版本！
+欢迎使用 SJTU 一键校园跑工具 4.2.0 版本！
 
 ## 简介
 
@@ -8,10 +8,10 @@
 
 本工具支持自定义跑步天数、时间和距离，帮助用户灵活完成体育锻炼要求。默认配置会生成从上一日开始的连续指定天数的跑步记录（默认为1天），每次跑步5km，时间为8:00。程序优先使用user.txt作为路线文件，若不存在则使用default.txt作为默认路线文件。
 
-## 版本 4.0.0 新功能
+## 版本 4.2.0 新功能
 
 - **安卓手机版应用** - 支持在 Android 设备上直接使用
-- **手动登录** - 手动登录jaccount 自动获取保存cookie 不存储帐密信息
+- **手动登录** - 手动登录或交我办登陆jaccount 自动获取保存cookie 不存储帐密信息
 - **跑步时间随机化** - 使跑步时间更真实自然
 - **异地登陆支持** - 与[accelerator-s/Revise_Edition](https://github.com/accelerator-s/SJTURunningMan_Revise_Edition)同步，支持在不同地点使用
 
@@ -124,7 +124,7 @@
 
 ### 1. 安装安卓应用
 
-1. 下载 APK 文件：`APK/app/release/app-release.apk`
+1. 下载 APK 文件
 2. 将 APK 文件传输到您的 Android 设备
 3. 在设备上安装 APK（可能需要开启"允许安装未知来源应用"选项）
 
@@ -238,8 +238,4 @@
 
 ---
 
-**Last Update: Wednesday, May 2, 2026**
-
----
-*五一小长假万岁*
-*致远一号万岁*
+**Last Update: Wednesday, May 3, 2026**
