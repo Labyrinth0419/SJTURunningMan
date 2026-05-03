@@ -1,17 +1,64 @@
-configs/*
-
+# Python
 **/__pycache__/
-
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
 dist/
+*.egg-info/
+.eggs/
+venv/
+ENV/
+env/
+.env
+.venv
 
-SJTU Sports Uploader.spec
+# PyInstaller
+*.spec
 
-refs/
+# IDE
 .idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android
+# APK files
+*.apk
+*.aab
+
+# Build outputs
+**/build/
+**/.gradle/
+**/gradle/
+.gradle/
+/local.properties
+/.idea/
+*.iml
+.externalNativeBuild
+/captures
+**/release/
+**/debug/
+
+# Qwen/Agent files
 .qwen/
 .agents/
 .codex/
 .claude/
-.gemini/
 .cursor/
+.gemini/
+
+# Project specific
+configs/*
+refs/
+
+# Other
+*.log
+*.tmp
+*.temp
